@@ -167,4 +167,4 @@ class LitBashWork(la.LightningWork):
 
   def on_exit(self):
       for child_pid in _collect_child_process_pids(os.getpid()):
-          os.kill(child_pid, signala.SIGTERM)
+          os.kill(child_pid, signal.SIGTERM)
