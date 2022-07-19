@@ -17,14 +17,14 @@ lightning install component https://github.com/robert-s-lee/lit_bashwork
 Once the app is installed, use it in an app:
 
 ```python
-from lit_bashwork import TemplateComponent
+from lit_bashwork import LitBasWork
 import lightning_app as la
 
 
 class LitApp(lapp.LightningFlow):
     def __init__(self) -> None:
         super().__init__()
-        self.lit_bashwork = TemplateComponent()
+        self.lit_bashwork = LitBasWork()
 
     def run(self):
         print(
