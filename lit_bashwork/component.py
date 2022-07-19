@@ -69,20 +69,20 @@ class LitBashWork(la.LightningWork):
 
   def get_from_drive(self,inputs):
     for i in inputs:
-      print(f"drive get {i}")
+      # print(f"drive get {i}")
       try:                     # file may not be ready 
         self.drive_lpa.get(i)  # Transfer the file from this drive to the local filesystem.
       except:
         pass  
-      os.system(f"find {i} -print")
+      #os.system(f"find {i} -print")
 
   def put_to_drive(self,outputs):
     for o in outputs:
-      print(f"drive put {o}")
+      # print(f"drive put {o}")
       # make sure dir end with / so that put works correctly
       if os.path.isdir(o):
         o = os.path.join(o,"")
-      os.system(f"find {o} -print")
+      # os.system(f"find {o} -print")
       self.drive_lpa.put(o)  
 
   def popen_wait(self, cmd, save_stdout, exception_on_error, **kwargs):
@@ -118,7 +118,12 @@ class LitBashWork(la.LightningWork):
     )
     self.pid = proc.pid
 
-  def subprocess_call(self, cmd, save_stdout=True, exception_on_error=False, venv_name = "", wait_for_exit=True, **kwargs):
+  def subprocess_call(self, cmd, 
+    save_stdout=True, 
+    exception_on_error=False, 
+    venv_name = "", 
+    wait_for_exit=True, 
+    **kwargs):
     """run the command"""
     cmd = cmd.format(host=self.host,port=self.port) # replace host and port
     cmd = ' '.join(shlex.split(cmd))                # convert multiline to a single line
@@ -142,6 +147,7 @@ class LitBashWork(la.LightningWork):
     save_stdout=True,
     wait_for_exit=True, 
     input_output_only = False, 
+    kill_pid=False,
     inputs=[], outputs=[], 
     **kwargs):
 
@@ -155,6 +161,13 @@ class LitBashWork(la.LightningWork):
 
     # run the command
     if not(input_output_only):
+      # kill previous process
+      if self.pid and kill_pid:
+        print(f"***killing {self.pid}")
+        os.kill(self.pid, signal.SIGTERM)
+        info = os.waitpid(self.pid, 0)
+
+      # start a new process
       self.subprocess_call(
         cmd=args, venv_name = venv_name, save_stdout=save_stdout, wait_for_exit=wait_for_exit, **kwargs)
 

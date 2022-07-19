@@ -1,1 +1,3 @@
 lightning
+# diag ssh session
+termpair
