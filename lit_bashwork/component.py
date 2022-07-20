@@ -10,6 +10,7 @@ import shlex
 from string import Template
 import signal
 import time
+import socket, errno
 
 def args_to_dict(script_args:str) -> dict:
   """convert str to dict A=1 B=2 to {'A':1, 'B':2}"""
@@ -35,18 +36,38 @@ def add_to_system_env(env_key='env', **kwargs) -> dict:
       new_env.update(env)
   return(new_env)
 
+def is_port_in_use(host:str, port: int) -> bool:
+  s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  try:
+      s.bind((host, port))
+      in_use = False
+  except socket.error as e:
+      in_use = True
+      if e.errno == errno.EADDRINUSE:
+          print("Port is already in use")
+      else:
+          # something else raised the socket.error exception
+          print(e)
+
+  s.close()
+  return(in_use)
+
+
+
 class LitBashWork(la.LightningWork):
   def __init__(self, *args, 
     wait_seconds_after_run = 10,
+    wait_seconds_after_kill = 10,
     drive_name = "lit://lpa",
     **kwargs):
     super().__init__(*args, **kwargs)
     self.wait_seconds_after_run = wait_seconds_after_run
+    self.wait_seconds_after_kill = wait_seconds_after_kill
     self.drive_lpa = Drive(drive_name)
 
     self.pid = None
     self.exit_code = None
-    self.stdout = []
+    self.stdout = None
     self.inputs = None
     self.outputs = None
     self.args = ""
@@ -54,6 +75,9 @@ class LitBashWork(la.LightningWork):
 
   def reset_last_args(self) -> str:
     self.args = ""
+
+  def reset_last_stdout(self) -> str:
+    self.stdout = None
 
   def last_args(self) -> str:
     return(self.args)
@@ -86,6 +110,7 @@ class LitBashWork(la.LightningWork):
       self.drive_lpa.put(o)  
 
   def popen_wait(self, cmd, save_stdout, exception_on_error, **kwargs):
+    """empty the stdout, do not set pid"""
     with subprocess.Popen(
       cmd, 
       stdout=subprocess.PIPE, 
@@ -96,7 +121,7 @@ class LitBashWork(la.LightningWork):
       executable='/bin/bash',
       **kwargs
     ) as proc:
-        self.pid = proc.pid
+        pid = proc.pid
         if proc.stdout:
             with proc.stdout:
                 for line in iter(proc.stdout.readline, b""):
@@ -104,6 +129,8 @@ class LitBashWork(la.LightningWork):
                     line = line.decode().rstrip() 
                     print(line)
                     if save_stdout:
+                      if self.stdout is None: 
+                        self.stdout = []
                       self.stdout.append(line)
     if exception_on_error and self.exit_code != 0:
       raise Exception(self.exit_code)  
@@ -125,7 +152,7 @@ class LitBashWork(la.LightningWork):
     wait_for_exit=True, 
     **kwargs):
     """run the command"""
-    cmd = cmd.format(host=self.host,port=self.port) # replace host and port
+    cmd = Template(cmd).substitute({'host':self.host,'port':self.port}) # replace host and port
     cmd = ' '.join(shlex.split(cmd))                # convert multiline to a single line
     print(cmd, kwargs)
     kwargs['env'] = add_to_system_env(**kwargs)
@@ -144,20 +171,22 @@ class LitBashWork(la.LightningWork):
 
   def run(self, args, 
     venv_name="",
-    save_stdout=True,
+    save_stdout=False,
     wait_for_exit=True, 
     input_output_only = False, 
     kill_pid=False,
     inputs=[], outputs=[], 
+    run_after_run=[],
     **kwargs):
 
-    print(args, kwargs)
+    print(f"args={args} \n venv_name={venv_name} \n save_stdout={save_stdout} \n wait_for_exit={wait_for_exit} \n input_output_only={input_output_only} \n kill_pid={kill_pid} \n inputs={inputs} \n outputs={outputs} \n run_after_run={run_after_run}")
     
     # pre processing
     self.on_before_run()    
     self.get_from_drive(inputs)
+    # set args stdout
     self.args = args
-    self.stdout = []
+    self.stdout = None
 
     # run the command
     if not(input_output_only):
@@ -166,16 +195,25 @@ class LitBashWork(la.LightningWork):
         print(f"***killing {self.pid}")
         os.kill(self.pid, signal.SIGTERM)
         info = os.waitpid(self.pid, 0)
+        while is_port_in_use(self.host, self.port):
+          print(f"***killed. pid {self.pid} waiting to free port")
+          time.sleep(self.wait_seconds_after_kill)
 
       # start a new process
       self.subprocess_call(
         cmd=args, venv_name = venv_name, save_stdout=save_stdout, wait_for_exit=wait_for_exit, **kwargs)
 
+    # Hack to get info after the run that can be passed to Flow 
+    for cmd in run_after_run:
+      self.popen_wait(cmd, save_stdout=True, exception_on_error=False, **kwargs)
+
     # post processing
     self.put_to_drive(outputs) 
     # give time for REDIS to catch up and propagate self.stdout back to flow
-    if save_stdout: 
+    if save_stdout or run_after_run:
+      print(f"waiting work to flow message sleeping {self.wait_seconds_after_run}")
       time.sleep(self.wait_seconds_after_run) 
+    # regular hook  
     self.on_after_run()
 
   def on_exit(self):
