@@ -3,63 +3,24 @@ from lightning_app.storage.path import Path
 from lightning.app.storage.drive import Drive
 from lightning_app.structures import Dict, List
 from lightning_app.utilities.app_helpers import _collect_child_process_pids
+from lit_bashwork.lit_bashwork_utils import add_to_system_env, args_to_dict
+from lit_bashwork.lit_work_utils import work_is_free, work_calls_len
 
 import os
-import subprocess
+import subprocess 
+import threading
 import shlex
 from string import Template
 import signal
 import time
-import socket, errno
-
-def args_to_dict(script_args:str) -> dict:
-  """convert str to dict A=1 B=2 to {'A':1, 'B':2}"""
-  script_args_dict = {}
-  for x in shlex.split(script_args, posix=False):
-    try:
-      k,v = x.split("=",1)
-    except:
-      k=x
-      v=None
-    script_args_dict[k] = v
-  return(script_args_dict) 
-
-def add_to_system_env(env_key='env', **kwargs) -> dict:
-  """add env to the current system env"""
-  new_env = None
-  if env_key in kwargs: 
-    env = kwargs[env_key]
-    if isinstance(env,str):
-      env = args_to_dict(env)  
-    if not(env is None) and not(env == {}):
-      new_env = os.environ.copy()
-      new_env.update(env)
-  return(new_env)
-
-def is_port_in_use(host:str, port: int) -> bool:
-  s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  try:
-      s.bind((host, port))
-      in_use = False
-  except socket.error as e:
-      in_use = True
-      if e.errno == errno.EADDRINUSE:
-          print("Port is already in use")
-      else:
-          # something else raised the socket.error exception
-          print(e)
-
-  s.close()
-  return(in_use)
-
-
+from functools import partial
 
 class LitBashWork(la.LightningWork):
   def __init__(self, *args, 
-    wait_seconds_after_run = 10,
-    wait_seconds_after_kill = 10,
-    drive_name = "lit://lpa",
-    **kwargs):
+      wait_seconds_after_run = 10,
+      wait_seconds_after_kill = 10,
+      drive_name = "lit://lpa",
+      **kwargs):
     super().__init__(*args, **kwargs)
     self.wait_seconds_after_run = wait_seconds_after_run
     self.wait_seconds_after_kill = wait_seconds_after_kill
@@ -72,6 +33,7 @@ class LitBashWork(la.LightningWork):
     self.outputs = None
     self.args = ""
 
+    self._wait_proc = None
 
   def reset_last_args(self) -> str:
     self.args = ""
@@ -91,6 +53,13 @@ class LitBashWork(la.LightningWork):
   def on_after_run(self):
       """Called after the python script is executed. Wrap outputs in Path so they will be available"""
 
+  # statistics on this work
+  def work_is_free(self) -> bool:
+      return(work_is_free(self))
+  def work_calls_len(self) -> int:
+      return(work_calls_len(self))
+
+  # drive
   def get_from_drive(self,inputs):
     for i in inputs:
       # print(f"drive get {i}")
@@ -120,11 +89,10 @@ class LitBashWork(la.LightningWork):
       shell=True, 
       executable='/bin/bash',
       **kwargs
-    ) as proc:
-        pid = proc.pid
-        if proc.stdout:
-            with proc.stdout:
-                for line in iter(proc.stdout.readline, b""):
+    ) as self._wait_proc:
+        if self._wait_proc.stdout:
+            with self._wait_proc.stdout:
+                for line in iter(self._wait_proc.stdout.readline, b""):
                     #logger.info("%s", line.decode().rstrip())
                     line = line.decode().rstrip() 
                     print(line)
@@ -132,6 +100,7 @@ class LitBashWork(la.LightningWork):
                       if self.stdout is None: 
                         self.stdout = []
                       self.stdout.append(line)
+
     if exception_on_error and self.exit_code != 0:
       raise Exception(self.exit_code)  
 
@@ -150,6 +119,7 @@ class LitBashWork(la.LightningWork):
     exception_on_error=False, 
     venv_name = "", 
     wait_for_exit=True, 
+    timeout=0,
     **kwargs):
     """run the command"""
     cmd = Template(cmd).substitute({'host':self.host,'port':self.port}) # replace host and port
@@ -162,7 +132,18 @@ class LitBashWork(la.LightningWork):
       
     if wait_for_exit:
       print("wait popen")
-      self.popen_wait(cmd, save_stdout=save_stdout, exception_on_error=exception_on_error, **kwargs)
+      # start the thread
+      target = partial(self.popen_wait, cmd, save_stdout=save_stdout, exception_on_error=exception_on_error, **kwargs)
+      thread = threading.Thread(target=target)
+      thread.start()
+      # tr 
+      thread.join(timeout)
+      if thread.is_alive() and timeout > 0:
+        print(f"terminating after waiting {timeout}")
+        self._wait_proc.terminate()
+      # should either wait, process is already done, or kill
+      thread.join()
+      print(self._wait_proc.returncode)
       print("wait completed",cmd)
     else:
       print("no wait popen")
@@ -177,9 +158,10 @@ class LitBashWork(la.LightningWork):
     kill_pid=False,
     inputs=[], outputs=[], 
     run_after_run=[],
+    timeout=0,
     **kwargs):
 
-    print(f"args={args} \n venv_name={venv_name} \n save_stdout={save_stdout} \n wait_for_exit={wait_for_exit} \n input_output_only={input_output_only} \n kill_pid={kill_pid} \n inputs={inputs} \n outputs={outputs} \n run_after_run={run_after_run}")
+    print(f"args={args} \n venv_name={venv_name} \n save_stdout={save_stdout} \n wait_for_exit={wait_for_exit} \n input_output_only={input_output_only} \n kill_pid={kill_pid} \n inputs={inputs} \n outputs={outputs} \n run_after_run={run_after_run} timeout={timeout} kwargs={kwargs}")
     
     # pre processing
     self.on_before_run()    
@@ -201,7 +183,7 @@ class LitBashWork(la.LightningWork):
 
       # start a new process
       self.subprocess_call(
-        cmd=args, venv_name = venv_name, save_stdout=save_stdout, wait_for_exit=wait_for_exit, **kwargs)
+        cmd=args, venv_name = venv_name, save_stdout=save_stdout, wait_for_exit=wait_for_exit, timeout=timeout, **kwargs)
 
     # Hack to get info after the run that can be passed to Flow 
     for cmd in run_after_run:
