@@ -9,5 +9,9 @@ from lit_bashwork.component import LitBashWork
 
 def test_placeholder_component():
     messenger = LitBashWork()
-    messenger.run("ls README.md")
-    assert messenger.stdout[0] == "README.md"
+    print("timeout=0")
+    messenger.run("sleep 10", timeout=0)
+    print("timeout=1")
+    messenger.run("sleep 10", timeout=1)
+    print("timeout=11")
+    messenger.run("sleep 10", timeout=11)
