@@ -1,6 +1,6 @@
 from lit_bashwork import LitBashWork
 
-import lightning_app as la
+import lightning.app as la
 
 class LitApp(la.LightningFlow):
     def __init__(self) -> None:

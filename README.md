@@ -18,10 +18,10 @@ Once the app is installed, use it in an app:
 
 ```python
 from lit_bashwork import LitBasWork
-import lightning_app as la
+import lightning.app as la
 
 
-class LitApp(lapp.LightningFlow):
+class LitApp(la.LightningFlow):
     def __init__(self) -> None:
         super().__init__()
         self.lit_bashwork = LitBasWork()
@@ -33,5 +33,5 @@ class LitApp(lapp.LightningFlow):
         self.lit_bashwork.run()
 
 
-app = lapp.LightningApp(LitApp())
+app = la.LightningApp(LitApp())
 ```
