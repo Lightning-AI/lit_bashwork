@@ -9,7 +9,7 @@ setup(
     author="Robert S Lee",
     author_email="sangkyulee@gmail.com",
     # REPLACE WITH YOUR OWN GITHUB PROJECT LINK
-    url="https://github.com/robert-s-lee/lit-bashwork",
+    url="https://github.com/Lightning-AI/lit-bashwork",
     install_requires=[],
     packages=find_packages(),
 )
