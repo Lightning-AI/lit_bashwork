@@ -11,7 +11,7 @@ lightning init component lit_bashwork
 First, install lit_bashwork (warning: this app has not been officially approved on the lightning gallery):
 
 ```bash
-lightning install component https://github.com/robert-s-lee/lit_bashwork
+lightning install component https://github.com/Lightning-AI/lit_bashwork
 ```
 
 Once the app is installed, use it in an app:
