@@ -1,10 +1,10 @@
 import pprint
 
-import lightning as L
-import lightning.app.utilities.enum as LUE
+from lightning import LightningWork
+from lightning.app.utilities.enum import WorkStageStatus
 
 
-def print_status(lwork: L.LightningWork):
+def print_status(lwork: LightningWork):
     """The statuses shows calls in at most one pending and all running status even if there are 100s in pending, only
     one pending is shown.
 
@@ -17,7 +17,7 @@ def print_status(lwork: L.LightningWork):
     pprint.pprint(lwork.statuses)
 
 
-def work_calls_len(lwork: L.LightningWork):
+def work_calls_len(lwork: LightningWork):
     """get the number of call in state dict.
 
     state dict has current and past calls to work.
@@ -26,7 +26,7 @@ def work_calls_len(lwork: L.LightningWork):
     return len(lwork.state["calls"]) - 1
 
 
-def work_is_free(lwork: L.LightningWork):
+def work_is_free(lwork: LightningWork):
     """work is free to accept new calls.
 
     this is expensive when a lot of calls accumulate over time work is when there is there is no pending and running
@@ -41,9 +41,9 @@ def work_is_free(lwork: L.LightningWork):
     # multiple works are queued but
     # count run that are in pending state
     if (
-        status.stage == LUE.WorkStageStatus.NOT_STARTED
-        or status.stage == LUE.WorkStageStatus.SUCCEEDED
-        or status.stage == LUE.WorkStageStatus.FAILED
+        status.stage == WorkStageStatus.NOT_STARTED
+        or status.stage == WorkStageStatus.SUCCEEDED
+        or status.stage == WorkStageStatus.FAILED
     ):
         # do not run if jobs are in pending state
         # not counting to reduce CPU load as looping thru all of the calls can get expensive

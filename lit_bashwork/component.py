@@ -11,8 +11,8 @@ import lightning.app as la
 from lightning.app.storage.drive import Drive
 from lightning.app.utilities.app_helpers import _collect_child_process_pids
 
-from lit_bashwork.lit_bashwork_utils import add_to_system_env, is_port_in_use
-from lit_bashwork.lit_work_utils import work_calls_len, work_is_free
+from lit_bashwork.utils.bash import add_to_system_env, is_port_in_use
+from lit_bashwork.utils.work import work_calls_len, work_is_free
 
 
 class LitBashWork(la.LightningWork):
