@@ -11,7 +11,7 @@ import lightning.app as la
 from lightning.app.storage.drive import Drive
 from lightning.app.utilities.app_helpers import _collect_child_process_pids
 
-from lit_bashwork.lit_bashwork_utils import add_to_system_env
+from lit_bashwork.lit_bashwork_utils import add_to_system_env, is_port_in_use
 from lit_bashwork.lit_work_utils import work_calls_len, work_is_free
 
 
@@ -65,7 +65,7 @@ class LitBashWork(la.LightningWork):
             # print(f"drive get {i}")
             try:  # file may not be ready
                 self.drive_lpa.get(i)  # Transfer the file from this drive to the local filesystem.
-            except:
+            except Exception:
                 pass
             # os.system(f"find {i} -print")
 
@@ -158,7 +158,15 @@ class LitBashWork(la.LightningWork):
     ):
 
         print(
-            f"args={args} \n venv_name={venv_name} \n save_stdout={save_stdout} \n wait_for_exit={wait_for_exit} \n input_output_only={input_output_only} \n kill_pid={kill_pid} \n inputs={inputs} \n outputs={outputs} \n run_after_run={run_after_run} timeout={timeout} kwargs={kwargs}"
+            f"args={args} \n"
+            f" venv_name={venv_name} \n"
+            f" save_stdout={save_stdout} \n"
+            f" wait_for_exit={wait_for_exit} \n"
+            f" input_output_only={input_output_only} \n"
+            f" kill_pid={kill_pid} \n"
+            f" inputs={inputs} \n"
+            f" outputs={outputs} \n"
+            f" run_after_run={run_after_run} timeout={timeout} kwargs={kwargs}"
         )
 
         # pre processing
